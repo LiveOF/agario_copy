@@ -1,0 +1,93 @@
+html,
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #f0f0f0;
+}
+
+#player {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    background-color: rgb(56, 201, 12);
+    border: 6px solid rgb(44, 158, 9);
+    border-radius: 100%;
+    transform: translate(-50%, -50%);
+}
+
+.food {
+    position: absolute;
+    border-radius: 100%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+#menu {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    z-index: 10;
+}
+
+#menu input {
+    padding: 0.5rem;
+    font-size: 1rem;
+    margin-top: 1rem;
+    width: 200px;
+}
+
+#menu button {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    margin-top: 1rem;
+    cursor: pointer;
+}
+
+#score {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    font-size: 20px;
+    font-weight: bold;
+    background: white;
+    padding: 0.3rem 0.6rem;
+    border-radius: 8px;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+    display: none;
+}
+
+#leaderboard {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+    font-family: sans-serif;
+    width: 160px;
+    z-index: 20;
+}
+
+#leaderboard h3 {
+    margin: 0 0 0.5rem;
+    font-size: 16px;
+    text-align: center;
+}
+
+#leaders {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 14px;
+}
+
+#leaders li {
+    padding: 2px 0;
+}
