@@ -58,6 +58,9 @@ function startGameLoop() {
   gameLoop();  // Запускаем игровой цикл
 }
 
+let minSpeed = 2;  // минимальная скорость перемещения в пикселях
+let maxSpeed = 5; 
+
 // Основная функция обновления состояния игры
 function update() {
   let dx = mouseX - playerX;
@@ -65,8 +68,27 @@ function update() {
   let distance = Math.sqrt(dx * dx + dy * dy);
 
   if (distance > 1) {
-    playerX += dx * speedFactor;
-    playerY += dy * speedFactor;
+    // Вычисляем базовую скорость
+    let baseSpeedX = dx * speedFactor;
+    let baseSpeedY = dy * speedFactor;
+    
+    // Находим текущую скорость движения
+    let currentSpeed = Math.sqrt(baseSpeedX * baseSpeedX + baseSpeedY * baseSpeedY);
+    
+    // Если скорость выходит за рамки ограничений, корректируем её
+    if (currentSpeed > maxSpeed) {
+      // Масштабируем скорость до максимальной
+      baseSpeedX = (baseSpeedX / currentSpeed) * maxSpeed;
+      baseSpeedY = (baseSpeedY / currentSpeed) * maxSpeed;
+    } else if (currentSpeed < minSpeed && distance > minSpeed) {
+      // Масштабируем скорость до минимальной, но только если расстояние больше минимальной скорости
+      baseSpeedX = (baseSpeedX / currentSpeed) * minSpeed;
+      baseSpeedY = (baseSpeedY / currentSpeed) * minSpeed;
+    }
+    
+    // Применяем ограниченную скорость
+    playerX += baseSpeedX;
+    playerY += baseSpeedY;
   }
 
   const foods = document.querySelectorAll(".food");
