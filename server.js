@@ -14,6 +14,8 @@ const gameParams = {
   speedFactor: 0.01,  // Скорость движения игрока
   initialSize: 48,    // Начальный размер игрока
   foodSpawnRate: 100, // Частота спавна еды
+  minSpeed: 0.5,
+  maxSpeed: 5
 };
 
 const players = [];

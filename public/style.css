@@ -7,13 +7,18 @@ body {
 
 #player {
     position: absolute;
-    width: 48px;
-    height: 48px;
     background-color: rgb(56, 201, 12);
     border: 6px solid rgb(44, 158, 9);
     border-radius: 100%;
     transform: translate(-50%, -50%);
 }
+
+#game-field {
+    position: relative;
+    width: 10000px;  /* Размер игрового поля */
+    height: 10000px;  /* Размер игрового поля */
+    overflow: hidden;  /* Скрывает части, выходящие за пределы экрана */
+  }  
 
 .food {
     position: absolute;
