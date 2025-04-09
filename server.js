@@ -1,62 +1,85 @@
 const express = require('express');
-const http = require('http');
 const WebSocket = require('ws');
+const path = require('path');
 
+// Создание Express приложения
 const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const port = 3000;  // Порт для веб-сервера
 
-let players = [];
+// Создание WebSocket сервера
+const wss = new WebSocket.Server({ noServer: true });
 
-app.use(express.static('public')); // Статика из public/
+// Параметры игры, которые будут передаваться клиентам
+const gameParams = {
+  speedFactor: 0.01,  // Скорость движения игрока
+  initialSize: 48,    // Начальный размер игрока
+  foodSpawnRate: 100, // Частота спавна еды
+};
+
+const players = [];
+
+// Статический сервер для обслуживания файлов
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Сервер для WebSocket
+app.server = app.listen(port, () => {
+  console.log(`Server is running at http://localhost:${port}`);
+});
+
+app.server.on('upgrade', (request, socket, head) => {
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request);
+  });
+});
 
 wss.on('connection', (ws) => {
-  let player = { id: null, name: "", score: 0 };
+  console.log('Player connected');
+  ws.on('message', (message) => {
+    const data = JSON.parse(message);
 
-  ws.on('message', (data) => {
-    const msg = JSON.parse(data);
+    if (data.type === 'join') {
+      const newPlayer = {
+        name: data.name,
+        score: 0,
+        socket: ws,
+      };
+      players.push(newPlayer);
 
-    if (msg.type === 'join') {
-      player.id = Date.now() + Math.random();
-      player.name = msg.name;
-      player.score = 0;
-      players.push(player);
-      broadcastLeaderboard();
+      // Отправляем параметры игры новому клиенту
+      ws.send(JSON.stringify({ type: 'gameParams', data: gameParams }));
+
+      // Обновляем таблицу лидеров
+      updateLeaderboard();
+
+      ws.on('close', () => {
+        const index = players.indexOf(newPlayer);
+        if (index !== -1) {
+          players.splice(index, 1);
+        }
+        updateLeaderboard();
+      });
     }
 
-    if (msg.type === 'score') {
-      const p = players.find(p => p.name === msg.name);
-      if (p) {
-        p.score = msg.score;
-        broadcastLeaderboard();
+    if (data.type === 'score') {
+      // Обновляем счёт игрока
+      const player = players.find((p) => p.name === data.name);
+      if (player) {
+        player.score = data.score;
+        updateLeaderboard();
       }
     }
   });
-
-  ws.on('close', () => {
-    players = players.filter(p => p !== player);
-    broadcastLeaderboard();
-  });
 });
 
-function broadcastLeaderboard() {
+// Функция для обновления таблицы лидеров
+function updateLeaderboard() {
   const leaderboard = players
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+    .map((player) => ({ name: player.name, score: player.score }));
 
-  const message = JSON.stringify({
-    type: 'leaderboard',
-    data: leaderboard
-  });
-
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(message);
-    }
+  players.forEach((player) => {
+    player.socket.send(
+      JSON.stringify({ type: 'leaderboard', data: leaderboard })
+    );
   });
 }
-
-const PORT = 8080;
-server.listen(PORT, () => {
-  console.log(`Сервер запущен на http://localhost:${PORT}`);
-});

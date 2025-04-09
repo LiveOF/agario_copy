@@ -1,21 +1,23 @@
-// game.js
 let player = document.querySelector("#player");
 let playerX = 500;
 let playerY = 500;
 let playerSize = 48;
-let speedFactor = 0.02; // меньше = медленнее
+let speedFactor = 0.02;  // начальное значение, будет изменено с сервера
 let mouseX = 0;
 let mouseY = 0;
 let score = 0;
 let socket;
 let playerName = "";
+let gameParams = {};  // параметры игры, полученные с сервера
 
+// Добавление обработчика события для движения мыши
 window.addEventListener("mousemove", (event) => {
   mouseX = event.clientX;
   mouseY = event.clientY;
 });
 
-function startGame() {
+// Функция для старта игры
+async function startGame() {
   const input = document.getElementById("username");
   playerName = input.value.trim();
   if (!playerName) return alert("Введите имя!");
@@ -31,15 +33,32 @@ function startGame() {
 
   socket.addEventListener("message", (event) => {
     const msg = JSON.parse(event.data);
+
+    if (msg.type === "gameParams") {
+      // Получаем параметры игры с сервера
+      gameParams = msg.data;
+      speedFactor = gameParams.speedFactor;
+      playerSize = gameParams.initialSize;
+      player.style.width = playerSize + "px";
+      player.style.height = playerSize + "px";
+
+      // После получения параметров игры, запускаем игру
+      startGameLoop();
+    }
+
     if (msg.type === "leaderboard") {
       updateLeaderboard(msg.data);
     }
   });
-
-  spawnFood();
-  gameLoop();
 }
 
+// Функция для запуска игрового цикла
+function startGameLoop() {
+  spawnFood();  // Спавним еду
+  gameLoop();  // Запускаем игровой цикл
+}
+
+// Основная функция обновления состояния игры
 function update() {
   let dx = mouseX - playerX;
   let dy = mouseY - playerY;
@@ -59,6 +78,7 @@ function update() {
 
     if (distance < playerSize / 2 + parseInt(food.dataset.size) / 2) {
       food.remove();
+      createFood()
       playerSize += 1;
       player.style.width = playerSize + "px";
       player.style.height = playerSize + "px";
@@ -70,15 +90,13 @@ function update() {
   });
 }
 
+// Функция для отрисовки игрока на экране
 function render() {
   player.style.left = playerX + "px";
   player.style.top = playerY + "px";
 }
 
-function distanceBetween(x1, y1, x2, y2) {
-  return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-}
-
+// Функции для генерации случайных чисел
 function getRandomNumber(min, max) {
   return Math.random() * (max - min) + min;
 }
@@ -91,9 +109,12 @@ function getRandomElement(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
-const colors = ["#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#FFC6FF"];
+// Массив цветов для еды
+const planets = ["#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#FFC6FF"];
 
-function createFood(x, y) {
+function createFood() {
+  let x = getRandomNumber(0, window.innerWidth)
+  let y = getRandomNumber(0, window.innerHeight)
   const food = document.createElement("div");
   const size = getRandomInt(24, 36);
   food.className = "food";
@@ -102,16 +123,24 @@ function createFood(x, y) {
   food.style.height = size + "px";
   food.style.left = x + "px";
   food.style.top = y + "px";
-  food.style.backgroundColor = getRandomElement(["#FFB3BA","#FFDFBA","#FFFFBA","#BAFFC9","#BAE1FF","#FFC6FF"]);
+  food.style.backgroundColor = getRandomElement(planets);
+
+  console.log('Создана еда:', food); // Добавим лог для проверки
+
   document.body.appendChild(food);
 }
 
-function spawnFood() {
-  for (let i = 0; i < 100; i++) {
-    createFood(getRandomNumber(0, window.innerWidth), getRandomNumber(0, window.innerHeight));
+
+// Функция для спавна еды
+async function spawnFood() {
+  console.log(gameParams)
+  for (let i = 0; i < gameParams.foodSpawnRate; i++) {
+    createFood();
   }
 }
 
+
+// Функция для обновления таблицы лидеров
 function updateLeaderboard(data) {
   const list = document.getElementById("leaders");
   list.innerHTML = "";
@@ -122,6 +151,7 @@ function updateLeaderboard(data) {
   });
 }
 
+// Основной игровой цикл
 let fps = 60;
 let start = Date.now();
 let frameDuration = 1000 / fps;
