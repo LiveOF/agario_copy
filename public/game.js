@@ -100,7 +100,9 @@ function update() {
 
     if (distance < playerSize / 2 + parseInt(food.dataset.size) / 2) {
       food.remove();
-      createFood()
+      sleep(300).then(() => {
+        createFood()
+      });
       playerSize += 1;
       player.style.width = playerSize + "px";
       player.style.height = playerSize + "px";
@@ -121,6 +123,10 @@ function render() {
 // Функции для генерации случайных чисел
 function getRandomNumber(min, max) {
   return Math.random() * (max - min) + min;
+}
+
+function sleep (time) {
+  return new Promise((resolve) => setTimeout(resolve, time));
 }
 
 function getRandomInt(min, max) {
