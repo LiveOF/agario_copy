@@ -1,17 +1,14 @@
 {
-  "name": "agario",
+  "name": "agario-multiplayer",
   "version": "1.0.0",
-  "main": "game.js",
+  "description": "Multiplayer Agar.io clone",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "express": "^5.1.0",
-    "ws": "^8.18.1"
-  },
-  "description": ""
+    "express": "^4.18.2",
+    "uuid": "^9.0.0",
+    "ws": "^8.13.0"
+  }
 }
