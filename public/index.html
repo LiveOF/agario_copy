@@ -4,23 +4,122 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agar.io Prototype</title>
+  <title>Agar.io Clone</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 
 <body>
+  <!-- Главное меню -->
   <div id="menu">
-    <h1>Agar.io Prototype</h1>
-    <input type="text" id="username" placeholder="Введите имя" />
-    <button onclick="startGame()">Играть</button>
+    <div class="menu-container">
+      <h1>Agar.io Clone</h1>
+      <div class="game-description">
+        <p>Управляйте шариком, поглощайте еду, растите и съедайте других игроков!</p>
+      </div>
+      
+      <form id="start-form">
+        <input type="text" id="username" placeholder="Введите ваше имя" required>
+        <button type="submit" class="primary-button">Играть</button>
+      </form>
+      
+      <button id="instructions-button" class="secondary-button">
+        <i class="fas fa-question-circle"></i> Как играть
+      </button>
+    </div>
+  </div>
+  
+  <!-- Инструкции -->
+  <div id="instructions">
+    <div class="instructions-container">
+      <h2>Как играть</h2>
+      
+      <div class="instruction-item">
+        <div class="instruction-icon"><i class="fas fa-mouse-pointer"></i></div>
+        <div class="instruction-text">
+          <h3>Движение</h3>
+          <p>Перемещайте курсор мыши, чтобы двигать шарик в этом направлении.</p>
+        </div>
+      </div>
+      
+      <div class="instruction-item">
+        <div class="instruction-icon"><i class="fas fa-circle"></i></div>
+        <div class="instruction-text">
+          <h3>Поедание еды</h3>
+          <p>Собирайте цветные шарики еды, чтобы расти в размерах и получать очки.</p>
+        </div>
+      </div>
+      
+      <div class="instruction-item">
+        <div class="instruction-icon"><i class="fas fa-users"></i></div>
+        <div class="instruction-text">
+          <h3>Поедание игроков</h3>
+          <p>Вы можете поглощать игроков, которые меньше вас на 15%.</p>
+        </div>
+      </div>
+      
+      <div class="instruction-item">
+        <div class="instruction-icon"><i class="fas fa-table-cells"></i></div>
+        <div class="instruction-text">
+          <h3>Карта</h3>
+          <p>В правом нижнем углу показывается ваше текущее положение на карте.</p>
+        </div>
+      </div>
+
+      <div class="instruction-item">
+        <div class="instruction-icon"><i class="fas fa-trophy"></i></div>
+        <div class="instruction-text">
+          <h3>Цель игры</h3>
+          <p>Стать самым большим шариком и занять первое место в таблице лидеров!</p>
+        </div>
+      </div>
+      
+      <button id="back-to-menu" class="primary-button">Назад в меню</button>
+    </div>
   </div>
 
+  <!-- Игровые элементы -->
   <div id="score">Счёт: 0</div>
   <div id="leaderboard">
     <h3>🏆 Лидеры</h3>
     <ul id="leaders"></ul>
   </div>
   <div id="player"></div>
+  
+  <!-- Меню карты -->
+  <div id="game-menu" style="display: none;">
+    <div class="grid-container">
+      <button id="grid-A1">A1</button>
+      <button id="grid-A2">A2</button>
+      <button id="grid-A3" class="active">A3</button>
+      <button id="grid-A4">A4</button>
+      <button id="grid-A5">A5</button>
+      
+      <button id="grid-B1">B1</button>
+      <button id="grid-B2">B2</button>
+      <button id="grid-B3">B3</button>
+      <button id="grid-B4">B4</button>
+      <button id="grid-B5">B5</button>
+      
+      <button id="grid-C1">C1</button>
+      <button id="grid-C2">C2</button>
+      <button id="grid-C3">C3</button>
+      <button id="grid-C4">C4</button>
+      <button id="grid-C5">C5</button>
+      
+      <button id="grid-D1">D1</button>
+      <button id="grid-D2">D2</button>
+      <button id="grid-D3">D3</button>
+      <button id="grid-D4">D4</button>
+      <button id="grid-D5">D5</button>
+      
+      <button id="grid-E1">E1</button>
+      <button id="grid-E2">E2</button>
+      <button id="grid-E3">E3</button>
+      <button id="grid-E4">E4</button>
+      <button id="grid-E5">E5</button>
+    </div>
+  </div>
 
   <script src="game.js"></script>
 </body>
