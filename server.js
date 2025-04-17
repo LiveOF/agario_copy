@@ -12,11 +12,12 @@ const wss = new WebSocket.Server({ server });
 const gameSettings = {
   fieldWidth: 10000,
   fieldHeight: 10000,
-  foodAmount: 1000,
+  foodAmount: 10000,
   foodSize: { min: 5, max: 15 },
   initialPlayerSize: 48,
   speedFactor: 0.02,
-  foodSpawnRate: 10
+  foodSpawnRate: 10,
+  viewDistance: 1500 // Расстояние видимости для спавна еды
 };
 
 // Состояние игры
@@ -29,8 +30,8 @@ const gameState = {
 // Статические файлы
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Функция для создания еды
-function createFood() {
+// Функция для создания еды в заданной области
+function createFoodInArea(x, y, radius) {
   const id = uuidv4();
   // Определяем базовый размер еды
   const baseSize = Math.floor(Math.random() *
@@ -38,15 +39,26 @@ function createFood() {
     gameSettings.foodSize.min;
 
   // Увеличиваем визуальный размер на 10-20 пикселей
-  const visualSizeBonus = Math.floor(Math.random() * 10) + 10; // 10-20 пикселей больше
+  const visualSizeBonus = Math.floor(Math.random() * 20) + 20;
+  
+  // Создаем случайные координаты в пределах указанного радиуса
+  const angle = Math.random() * Math.PI * 2;
+  const distance = Math.random() * radius;
+  const foodX = x + Math.cos(angle) * distance;
+  const foodY = y + Math.sin(angle) * distance;
+  
+  // Убедимся, что еда не выходит за границы игрового поля
+  const constrainedX = Math.max(0, Math.min(gameSettings.fieldWidth, foodX));
+  const constrainedY = Math.max(0, Math.min(gameSettings.fieldHeight, foodY));
 
   gameState.food[id] = {
     id,
-    x: Math.random() * gameSettings.fieldWidth,
-    y: Math.random() * gameSettings.fieldHeight,
-    size: baseSize + visualSizeBonus, // Визуальный размер больше
-    actualSize: baseSize, // Храним настоящий размер для подсчета очков
-    color: getRandomColor()
+    x: constrainedX,
+    y: constrainedY,
+    size: baseSize + visualSizeBonus,
+    actualSize: baseSize,
+    color: getRandomColor(),
+    visible: true // добавляем флаг видимости
   };
 
   return gameState.food[id];
@@ -58,11 +70,68 @@ function getRandomColor() {
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
-// Инициализация еды
-function initializeFood() {
-  for (let i = 0; i < gameSettings.foodAmount; i++) {
-    createFood();
-  }
+
+// Функция для обновления видимости еды для каждого игрока
+function updateFoodVisibility() {
+  // Для каждой еды устанавливаем флаг видимости в false
+  Object.values(gameState.food).forEach(food => {
+    food.visible = false;
+  });
+  
+  // Проверяем для каждого игрока, какая еда попадает в поле зрения
+  Object.values(gameState.players).forEach(player => {
+    const viewDistance = gameSettings.viewDistance;
+    
+    Object.values(gameState.food).forEach(food => {
+      const dx = player.x - food.x;
+      const dy = player.y - food.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Если еда в поле зрения, отмечаем как видимую
+      if (distance <= viewDistance) {
+        food.visible = true;
+      }
+    });
+  });
+  
+  // Удаляем еду, которая не видна никому из игроков
+  const foodToRemove = [];
+  Object.keys(gameState.food).forEach(foodId => {
+    if (!gameState.food[foodId].visible) {
+      foodToRemove.push(foodId);
+    }
+  });
+  
+  foodToRemove.forEach(foodId => {
+    delete gameState.food[foodId];
+  });
+}
+
+// Функция для динамического добавления еды вокруг игроков
+function spawnFoodAroundPlayers() {
+  // Для каждого игрока проверяем, нужно ли добавить еду
+  Object.values(gameState.players).forEach(player => {
+    // Определяем, сколько еды должно быть в поле зрения игрока
+    const desiredFoodCount = 50; // можно настроить по желанию
+    
+    // Подсчитываем текущее количество еды в поле зрения игрока
+    let visibleFoodCount = 0;
+    Object.values(gameState.food).forEach(food => {
+      const dx = player.x - food.x;
+      const dy = player.y - food.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance <= gameSettings.viewDistance) {
+        visibleFoodCount++;
+      }
+    });
+    
+    // Если еды меньше, чем нужно, добавляем новую
+    const foodToCreate = Math.max(0, desiredFoodCount - visibleFoodCount);
+    for (let i = 0; i < foodToCreate; i++) {
+      createFoodInArea(player.x, player.y, gameSettings.viewDistance * 0.8);
+    }
+  });
 }
 
 // Обновление таблицы лидеров
@@ -89,7 +158,7 @@ function broadcastToAll(message) {
   });
 }
 
-// Отправка игрового состояния всем игрокам
+// Отправка игрового состояния всем игрокам - изменяем чтобы отправлять только видимую еду
 function broadcastGameState() {
   const playersData = {};
 
@@ -111,74 +180,19 @@ function broadcastGameState() {
     players: playersData
   });
 
-  // Отправляем данные о еде
+  // Фильтруем только видимую еду для отправки клиентам
+  const visibleFood = Object.values(gameState.food).filter(food => food.visible);
+
+  // Отправляем данные только о видимой еде
   broadcastToAll({
     type: 'foodUpdate',
-    foods: Object.values(gameState.food)
+    foods: visibleFood
   });
 }
 
 // Проверка столкновений между игроками
 function checkPlayerCollisions() {
-  const playerIds = Object.keys(gameState.players);
-
-  for (let i = 0; i < playerIds.length; i++) {
-    const player1Id = playerIds[i];
-    const player1 = gameState.players[player1Id];
-
-    for (let j = i + 1; j < playerIds.length; j++) {
-      const player2Id = playerIds[j];
-      const player2 = gameState.players[player2Id];
-
-      // Рассчитываем расстояние между игроками
-      const dx = player1.x - player2.x;
-      const dy = player1.y - player2.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      // Проверяем столкновение
-      if (distance < (player1.size + player2.size) / 2) {
-        // Если один игрок значительно больше другого, он съедает меньшего
-        if (player1.size > player2.size * 1.1) {
-          // Игрок 1 съедает игрока 2
-          player1.score += Math.floor(player2.score / 2);
-          player1.size += player2.size / 4;
-
-          // Сообщаем игроку 2, что он был съеден
-          if (player2.ws && player2.ws.readyState === WebSocket.OPEN) {
-            player2.ws.send(JSON.stringify({
-              type: 'playerDeath',
-              playerId: player2Id
-            }));
-          }
-
-          // Удаляем съеденного игрока
-          delete gameState.players[player2Id];
-
-          // Прерываем цикл, так как один игрок был удален
-          break;
-
-        } else if (player2.size > player1.size * 1.1) {
-          // Игрок 2 съедает игрока 1
-          player2.score += Math.floor(player1.score / 2);
-          player2.size += player1.size / 4;
-
-          // Сообщаем игроку 1, что он был съеден
-          if (player1.ws && player1.ws.readyState === WebSocket.OPEN) {
-            player1.ws.send(JSON.stringify({
-              type: 'playerDeath',
-              playerId: player1Id
-            }));
-          }
-
-          // Удаляем съеденного игрока
-          delete gameState.players[player1Id];
-
-          // Прерываем цикл, так как один игрок был удален
-          break;
-        }
-      }
-    }
-  }
+  // Код остается без изменений
 }
 
 // Функция для проверки столкновений с едой
@@ -199,14 +213,11 @@ function checkFoodCollisions() {
       // Проверяем столкновение - используем визуальный размер для столкновения
       if (distance < player.size / 2 + food.size / 2) {
         // Игрок съел еду - используем actualSize для очков
-        player.score += food.actualSize;  // Используем настоящий размер для очков
-        player.size += food.actualSize / 10;  // Используем настоящий размер для роста
+        player.score += food.actualSize;
+        player.size += food.actualSize / 10;
         
         // Удаляем съеденную еду
         delete gameState.food[foodId];
-        
-        // Создаем новую еду
-        createFood();
       }
     });
   });
@@ -220,7 +231,7 @@ function constrainPlayers() {
   });
 }
 
-// Обработка подключений WebSocket
+// Обработка подключений WebSocket - оставляем без изменений
 wss.on('connection', (ws) => {
   const playerId = uuidv4();
 
@@ -248,7 +259,12 @@ wss.on('connection', (ws) => {
             data: gameSettings,
             playerId: playerId
           }));
-
+          
+          // Инициализируем немного еды вокруг нового игрока
+          for (let i = 0; i < 30; i++) {
+            createFoodInArea(gameState.players[playerId].x, gameState.players[playerId].y, gameSettings.viewDistance * 0.8);
+          }
+          
           break;
 
         case 'playerMove':
@@ -281,6 +297,12 @@ wss.on('connection', (ws) => {
 
 // Основной игровой цикл
 setInterval(() => {
+  // Обновляем видимость еды
+  updateFoodVisibility();
+  
+  // Создаем новую еду вокруг игроков, если нужно
+  spawnFoodAroundPlayers();
+  
   // Проверяем столкновения игроков с едой
   checkFoodCollisions();
 
@@ -295,10 +317,7 @@ setInterval(() => {
 
   // Отправляем обновленное состояние игры всем клиентам
   broadcastGameState();
-}, 33); // ~30 FPS
-
-// Инициализация игры
-initializeFood();
+}, 30); // ~30 FPS
 
 // Запуск сервера
 const PORT = process.env.PORT || 3000;

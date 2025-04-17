@@ -254,37 +254,56 @@ function updateOtherPlayers(players) {
   }
 }
 
-// Функция для обновления еды
+// Функция для обновления еды - модифицируем для работы с видимой едой
 function updateFood(serverFoods) {
-  // Очищаем предыдущие элементы еды
-  foods.forEach(food => {
-    if (food.element) {
-      food.element.remove();
-    }
-  });
-  foods = [];
+  // Удаляем предыдущую еду, которая больше не видна
+  const visibleFoodIds = new Set(serverFoods.map(f => f.id));
   
-  // Добавляем новую еду с сервера
+  foods = foods.filter(food => {
+    if (!visibleFoodIds.has(food.id)) {
+      if (food.element) {
+        food.element.remove();
+      }
+      return false;
+    }
+    return true;
+  });
+  
+  // Обработка новой еды
   serverFoods.forEach(foodData => {
-    const food = document.createElement("div");
-    food.className = "food";
-    food.style.position = "absolute";
-    food.style.borderRadius = "50%";
-    food.style.width = foodData.size + "px";
-    food.style.height = foodData.size + "px";
-    food.style.left = (foodData.x - foodData.size / 2) + "px";
-    food.style.top = (foodData.y - foodData.size / 2) + "px";
-    food.style.backgroundColor = foodData.color;
+    // Проверяем, есть ли уже такая еда в нашем массиве
+    const existingFood = foods.find(f => f.id === foodData.id);
     
-    gameField.appendChild(food);
-    
-    foods.push({
-      id: foodData.id,
-      element: food,
-      x: foodData.x,
-      y: foodData.y,
-      size: foodData.size
-    });
+    if (existingFood) {
+      // Обновляем позицию существующей еды, если нужно
+      existingFood.x = foodData.x;
+      existingFood.y = foodData.y;
+      
+      // Обновляем визуальное представление
+      existingFood.element.style.left = (foodData.x - foodData.size / 2) + "px";
+      existingFood.element.style.top = (foodData.y - foodData.size / 2) + "px";
+    } else {
+      // Создаем новую еду
+      const food = document.createElement("div");
+      food.className = "food";
+      food.style.position = "absolute";
+      food.style.borderRadius = "50%";
+      food.style.width = foodData.size + "px";
+      food.style.height = foodData.size + "px";
+      food.style.left = (foodData.x - foodData.size / 2) + "px";
+      food.style.top = (foodData.y - foodData.size / 2) + "px";
+      food.style.backgroundColor = foodData.color;
+      
+      gameField.appendChild(food);
+      
+      foods.push({
+        id: foodData.id,
+        element: food,
+        x: foodData.x,
+        y: foodData.y,
+        size: foodData.size
+      });
+    }
   });
 }
 
