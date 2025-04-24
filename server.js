@@ -15,7 +15,7 @@ const gameSettings = {
   foodAmount: 10000,
   foodSize: { min: 5, max: 15 },
   initialPlayerSize: 48,
-  speedFactor: 0.02,
+  speedFactor: 0.015,
   foodSpawnRate: 10,
   viewDistance: 1500 // Расстояние видимости для спавна еды
 };

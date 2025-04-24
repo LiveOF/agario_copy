@@ -1,13 +1,10 @@
 let player = document.querySelector("#player");
-let playerSize = 48;
-let speedFactor = 0.02;
 let mouseX = 0;
 let mouseY = 0;
-let score = 0;
 let socket;
 let playerName = "";
 let playerId = null;
-let gameParams = {};
+let gameParams = {}; // Здесь будут храниться настройки игры с сервера
 let otherPlayers = {}; // Хранит информацию о других игроках
 let foods = []; // Хранит информацию о всей еде
 let viewportX = 0;
@@ -16,6 +13,7 @@ let cameraX = window.innerWidth / 2;
 let cameraY = window.innerHeight / 2;
 let playerX = cameraX;
 let playerY = cameraY;
+let currentGrid = null; // Текущий сектор на карте
 
 // Настройка игрового поля (визуально для клиента)
 const gameField = document.createElement("div");
@@ -32,6 +30,34 @@ window.addEventListener("mousemove", (event) => {
   mouseY = event.clientY;
 });
 
+// Инициализация событий для меню и инструкций
+document.addEventListener("DOMContentLoaded", () => {
+  const startForm = document.getElementById("start-form");
+  const instructionsButton = document.getElementById("instructions-button");
+  const backToMenuButton = document.getElementById("back-to-menu");
+  const playAgainButton = document.getElementById("play-again");
+  
+  startForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    startGame();
+  });
+  
+  instructionsButton.addEventListener("click", () => {
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("instructions").style.display = "flex";
+  });
+  
+  backToMenuButton.addEventListener("click", () => {
+    document.getElementById("instructions").style.display = "none";
+    document.getElementById("menu").style.display = "flex";
+  });
+  
+  playAgainButton.addEventListener("click", () => {
+    document.getElementById("game-over").style.display = "none";
+    document.getElementById("menu").style.display = "flex";
+  });
+});
+
 // Функция для старта игры
 async function startGame() {
   const input = document.getElementById("username");
@@ -41,6 +67,13 @@ async function startGame() {
   document.getElementById("menu").style.display = "none";
   document.getElementById("score").style.display = "block";
   document.getElementById("leaderboard").style.display = "block";
+  document.getElementById("minimap").style.display = "block";
+
+  // Инициализируем мини-карту (без индикатора)
+  initMinimap();
+
+  // Устанавливаем имя игрока
+  player.textContent = playerName;
 
   // Подключение к WebSocket серверу
   socket = new WebSocket("ws://" + window.location.host);
@@ -56,10 +89,6 @@ async function startGame() {
       case "gameParams":
         // Получаем параметры игры с сервера
         gameParams = msg.data;
-        speedFactor = gameParams.speedFactor;
-        playerSize = gameParams.initialPlayerSize;
-        player.style.width = playerSize + "px";
-        player.style.height = playerSize + "px";
         playerId = msg.playerId; // Сохраняем ID игрока
         
         // Устанавливаем размеры игрового поля на основе данных с сервера
@@ -67,6 +96,9 @@ async function startGame() {
         gameField.style.height = gameParams.fieldHeight + "px";
         gameField.style.border = "2px solid #ccc";
         gameField.style.backgroundColor = "#F0F0F0";
+        
+        // Добавляем линии сетки на игровое поле (4x4)
+        addGridLines();
         
         // После получения параметров игры, запускаем игру
         startGameLoop();
@@ -86,8 +118,7 @@ async function startGame() {
       
       case "playerDeath":
         if (msg.playerId === playerId) {
-          alert(`Игра окончена! Ваш счет: ${score}`);
-          window.location.reload(); // Перезагружаем страницу после смерти
+          showGameOver(msg.finalScore);
         }
         break;
     }
@@ -99,13 +130,77 @@ async function startGame() {
   });
 }
 
+// Функция для добавления линий сетки на поле
+function addGridLines() {
+  // Разделяем поле на 4x4 сектора
+  const gridSize = 4;
+  const cellWidth = gameParams.fieldWidth / gridSize;
+  const cellHeight = gameParams.fieldHeight / gridSize;
+  
+  // Очищаем существующие линии
+  document.querySelectorAll(".grid-line, .grid-label").forEach(el => el.remove());
+  
+  // Добавляем вертикальные линии
+  for (let i = 1; i < gridSize; i++) {
+    const line = document.createElement("div");
+    line.className = "grid-line vertical";
+    line.style.position = "absolute";
+    line.style.top = "0";
+    line.style.left = (cellWidth * i) + "px";
+    line.style.width = "1px";
+    line.style.height = "100%";
+    line.style.backgroundColor = "rgba(200, 200, 200, 0.5)";
+    line.style.zIndex = "5";
+    gameField.appendChild(line);
+  }
+  
+  // Добавляем горизонтальные линии
+  for (let i = 1; i < gridSize; i++) {
+    const line = document.createElement("div");
+    line.className = "grid-line horizontal";
+    line.style.position = "absolute";
+    line.style.left = "0";
+    line.style.top = (cellHeight * i) + "px";
+    line.style.height = "1px";
+    line.style.width = "100%";
+    line.style.backgroundColor = "rgba(200, 200, 200, 0.5)";
+    line.style.zIndex = "5";
+    gameField.appendChild(line);
+  }
+}
+
+// Функция для инициализации мини-карты (без индикатора)
+function initMinimap() {
+  // Настраиваем обработчики для кнопок мини-карты
+  const gridButtons = document.querySelectorAll("#minimap button");
+  gridButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      // Получаем координаты сектора на основе его ID
+      const gridId = button.id.replace("grid-", "");
+      const letter = gridId.charAt(0);
+      const number = parseInt(gridId.charAt(1));
+      
+      // Вычисляем координаты центра сектора (для сетки 4x4)
+      const letterIndex = letter.charCodeAt(0) - 'A'.charCodeAt(0);
+      const x = (number - 1) * (gameParams.fieldWidth / 4) + (gameParams.fieldWidth / 8);
+      const y = letterIndex * (gameParams.fieldHeight / 4) + (gameParams.fieldHeight / 8);
+      
+      // Отправляем запрос на телепортацию игрока
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: "teleport",
+          x: x,
+          y: y
+        }));
+      }
+    });
+  });
+}
+
 // Функция для запуска игрового цикла
 function startGameLoop() {
   gameLoop();
 }
-
-let minSpeed = 0.5;
-let maxSpeed = 5;
 
 // Основная функция обновления состояния игры
 function update() {
@@ -115,11 +210,12 @@ function update() {
   const me = otherPlayers[playerId];
   playerX = me.x;
   playerY = me.y;
-  playerSize = me.size;
   
-  // Обновляем размер визуального представления игрока
-  player.style.width = playerSize + "px";
-  player.style.height = playerSize + "px";
+  // Проверяем, что у нас есть необходимые параметры с сервера
+  if (!gameParams.speedFactor) {
+    console.error("speedFactor не получен с сервера");
+    return;
+  }
   
   // Рассчитываем направление движения
   let dx = mouseX - window.innerWidth / 2;
@@ -127,21 +223,12 @@ function update() {
   let distance = Math.sqrt(dx * dx + dy * dy);
 
   if (distance > 1) {
-    // Вычисляем базовую скорость
-    let baseSpeedX = dx * speedFactor;
-    let baseSpeedY = dy * speedFactor;
+    // Вычисляем скорость движения на основе параметров сервера
+    let baseSpeedX = dx * gameParams.speedFactor;
+    let baseSpeedY = dy * gameParams.speedFactor;
     
     // Находим текущую скорость движения
     let currentSpeed = Math.sqrt(baseSpeedX * baseSpeedX + baseSpeedY * baseSpeedY);
-    
-    // Корректируем скорость
-    if (currentSpeed > maxSpeed) {
-      baseSpeedX = (baseSpeedX / currentSpeed) * maxSpeed;
-      baseSpeedY = (baseSpeedY / currentSpeed) * maxSpeed;
-    } else if (currentSpeed < minSpeed && distance > minSpeed) {
-      baseSpeedX = (baseSpeedX / currentSpeed) * minSpeed;
-      baseSpeedY = (baseSpeedY / currentSpeed) * minSpeed;
-    }
     
     // Отправляем новую позицию на сервер
     const newX = playerX + baseSpeedX;
@@ -156,6 +243,45 @@ function update() {
   
   // Обновляем камеру чтобы следовать за игроком
   updateCamera();
+  
+  // Обновляем активный сектор на мини-карте (без индикатора)
+  updateMinimapPosition();
+}
+
+// Функция для обновления активного сектора на мини-карте
+function updateMinimapPosition() {
+  if (!gameParams.fieldWidth || !gameParams.fieldHeight) return;
+  
+  // Вычисляем относительное положение игрока на карте (0-1)
+  const relX = playerX / gameParams.fieldWidth;
+  const relY = playerY / gameParams.fieldHeight;
+  
+  // Определяем, в каком секторе находится игрок (для сетки 4x4)
+  const gridSizeX = 4;
+  const gridSizeY = 4;
+  const gridX = Math.min(Math.floor(relX * gridSizeX), gridSizeX - 1);
+  const gridY = Math.min(Math.floor(relY * gridSizeY), gridSizeY - 1);
+  const letters = ["A", "B", "C", "D"];
+  const newGrid = letters[gridY] + (gridX + 1);
+  
+  // Если игрок перешел в новый сектор, обновляем активный сектор
+  if (newGrid !== currentGrid) {
+    // Сбрасываем выделение предыдущего сектора
+    if (currentGrid) {
+      const prevButton = document.getElementById(`grid-${currentGrid}`);
+      if (prevButton) {
+        prevButton.classList.remove("active");
+      }
+    }
+    
+    // Выделяем новый сектор
+    const newButton = document.getElementById(`grid-${newGrid}`);
+    if (newButton) {
+      newButton.classList.add("active");
+    }
+    
+    currentGrid = newGrid;
+  }
 }
 
 // Функция для обновления положения камеры
@@ -170,7 +296,14 @@ function updateCamera() {
 
 // Функция для отрисовки игрока на экране
 function render() {
+  if (!playerId || !otherPlayers[playerId]) return;
+  
+  // Получаем размер игрока с сервера
+  const playerSize = otherPlayers[playerId].size;
+  
   // Игрок всегда в центре экрана
+  player.style.width = playerSize + "px";
+  player.style.height = playerSize + "px";
   player.style.left = (window.innerWidth / 2 - playerSize / 2) + "px";
   player.style.top = (window.innerHeight / 2 - playerSize / 2) + "px";
 }
@@ -181,7 +314,9 @@ function updateOtherPlayers(players) {
   for (const id in otherPlayers) {
     if (!players[id]) {
       if (id !== playerId) { // Не удаляем собственного игрока
-        otherPlayers[id].element.remove();
+        if (otherPlayers[id].element) {
+          otherPlayers[id].element.remove();
+        }
       }
       delete otherPlayers[id];
     }
@@ -227,9 +362,8 @@ function updateOtherPlayers(players) {
           score: p.score
         };
         
-        // Обновляем счет
-        score = p.score;
-        document.getElementById("score").innerText = `Счёт: ${score}`;
+        // Обновляем счет из данных с сервера
+        document.getElementById("score").innerText = `Счёт: ${p.score}`;
       }
     } else {
       // Обновляем данные игрока
@@ -240,21 +374,22 @@ function updateOtherPlayers(players) {
       
       // Если это наш игрок, обновляем счет
       if (id === playerId) {
-        score = p.score;
-        document.getElementById("score").innerText = `Счёт: ${score}`;
+        document.getElementById("score").innerText = `Счёт: ${p.score}`;
       } else {
         // Для других игроков обновляем их положение на поле
         const elem = otherPlayers[id].element;
-        elem.style.width = p.size + 'px';
-        elem.style.height = p.size + 'px';
-        elem.style.left = (p.x - p.size / 2) + 'px';
-        elem.style.top = (p.y - p.size / 2) + 'px';
+        if (elem) {
+          elem.style.width = p.size + 'px';
+          elem.style.height = p.size + 'px';
+          elem.style.left = (p.x - p.size / 2) + 'px';
+          elem.style.top = (p.y - p.size / 2) + 'px';
+        }
       }
     }
   }
 }
 
-// Функция для обновления еды - модифицируем для работы с видимой едой
+// Функция для обновления еды
 function updateFood(serverFoods) {
   // Удаляем предыдущую еду, которая больше не видна
   const visibleFoodIds = new Set(serverFoods.map(f => f.id));
@@ -318,12 +453,20 @@ function updateLeaderboard(data) {
     
     // Выделяем наше имя в списке лидеров
     if (p.name === playerName) {
-      li.style.fontWeight = "bold";
-      li.style.color = "#FF5733";
+      li.classList.add("current-player");
     }
     
     list.appendChild(li);
   });
+}
+
+// Функция для отображения экрана окончания игры
+function showGameOver(finalScore) {
+  const gameOverModal = document.getElementById("game-over");
+  const finalScoreElement = document.querySelector(".final-score");
+  
+  finalScoreElement.textContent = `Ваш счёт: ${finalScore}`;
+  gameOverModal.style.display = "flex";
 }
 
 // Функция для генерации случайного цвета
