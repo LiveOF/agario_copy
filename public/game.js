@@ -30,7 +30,19 @@ window.addEventListener("mousemove", (event) => {
   mouseY = event.clientY;
 });
 
-// Инициализация событий для меню и инструкци
+// Добавление обработчика события для клавиатуры
+window.addEventListener("keydown", (event) => {
+  if (event.code === "Space") {
+    // При нажатии пробела отправляем команду на разделение
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: "split"
+      }));
+    }
+  }
+});
+
+// Инициализация событий для меню и инструкции
 document.addEventListener("DOMContentLoaded", () => {
   const startForm = document.getElementById("start-form");
   const instructionsButton = document.getElementById("instructions-button");
@@ -208,8 +220,24 @@ function update() {
   
   // Получаем нашего игрока из объекта игроков
   const me = otherPlayers[playerId];
-  playerX = me.x;
-  playerY = me.y;
+  
+  // Проверяем наличие клеток
+  if (!me.cells || me.cells.length === 0) return;
+  
+  // Рассчитываем центр массы для камеры
+  let totalX = 0;
+  let totalY = 0;
+  let totalMass = 0;
+  
+  me.cells.forEach(cell => {
+    const mass = cell.size * cell.size;
+    totalX += cell.x * mass;
+    totalY += cell.y * mass;
+    totalMass += mass;
+  });
+  
+  playerX = totalX / totalMass;
+  playerY = totalY / totalMass;
   
   // Проверяем, что у нас есть необходимые параметры с сервера
   if (!gameParams.speedFactor) {
@@ -223,21 +251,11 @@ function update() {
   let distance = Math.sqrt(dx * dx + dy * dy);
 
   if (distance > 1) {
-    // Вычисляем скорость движения на основе параметров сервера
-    let baseSpeedX = dx * gameParams.speedFactor;
-    let baseSpeedY = dy * gameParams.speedFactor;
-    
-    // Находим текущую скорость движения
-    let currentSpeed = Math.sqrt(baseSpeedX * baseSpeedX + baseSpeedY * baseSpeedY);
-    
-    // Отправляем новую позицию на сервер
-    const newX = playerX + baseSpeedX;
-    const newY = playerY + baseSpeedY;
-    
+    // Отправляем новое направление на сервер
     socket.send(JSON.stringify({
       type: "playerMove",
-      x: newX,
-      y: newY
+      dx: dx / distance,
+      dy: dy / distance
     }));
   }
   
@@ -286,7 +304,7 @@ function updateMinimapPosition() {
 
 // Функция для обновления положения камеры
 function updateCamera() {
-  // Установка камеры в центр вокруг игрока
+  // Установка камеры в центр вокруг центра масс игрока
   viewportX = playerX - window.innerWidth / 2;
   viewportY = playerY - window.innerHeight / 2;
   
@@ -298,14 +316,41 @@ function updateCamera() {
 function render() {
   if (!playerId || !otherPlayers[playerId]) return;
   
-  // Получаем размер игрока с сервера
-  const playerSize = otherPlayers[playerId].size;
+  const me = otherPlayers[playerId];
   
-  // Игрок всегда в центре экрана
-  player.style.width = playerSize + "px";
-  player.style.height = playerSize + "px";
-  player.style.left = (window.innerWidth / 2 - playerSize / 2) + "px";
-  player.style.top = (window.innerHeight / 2 - playerSize / 2) + "px";
+  // Удаляем старые элементы игрока
+  document.querySelectorAll('.player-cell').forEach(elem => elem.remove());
+  
+  // Если у игрока есть клетки, отрисовываем их
+  if (me.cells && me.cells.length > 0) {
+    me.cells.forEach(cell => {
+      // Создаем элемент для клетки
+      const cellElem = document.createElement('div');
+      cellElem.className = 'player-cell';
+      cellElem.style.position = 'absolute';
+      cellElem.style.borderRadius = '50%';
+      cellElem.style.backgroundColor = '#4CAF50';
+      cellElem.style.display = 'flex';
+      cellElem.style.justifyContent = 'center';
+      cellElem.style.alignItems = 'center';
+      cellElem.style.color = 'white';
+      cellElem.style.fontSize = '14px';
+      cellElem.style.fontWeight = 'bold';
+      cellElem.style.zIndex = '100';
+      cellElem.textContent = playerName;
+      
+      // Позиционируем клетку относительно камеры
+      const screenX = cell.x - viewportX - cell.size / 2;
+      const screenY = cell.y - viewportY - cell.size / 2;
+      
+      cellElem.style.width = cell.size + 'px';
+      cellElem.style.height = cell.size + 'px';
+      cellElem.style.left = screenX + 'px';
+      cellElem.style.top = screenY + 'px';
+      
+      document.body.appendChild(cellElem);
+    });
+  }
 }
 
 // Функция для обновления других игроков
@@ -314,8 +359,9 @@ function updateOtherPlayers(players) {
   for (const id in otherPlayers) {
     if (!players[id]) {
       if (id !== playerId) { // Не удаляем собственного игрока
-        if (otherPlayers[id].element) {
-          otherPlayers[id].element.remove();
+        const playerData = otherPlayers[id];
+        if (playerData.elements) {
+          playerData.elements.forEach(elem => elem.remove());
         }
       }
       delete otherPlayers[id];
@@ -328,37 +374,40 @@ function updateOtherPlayers(players) {
     
     if (!otherPlayers[id]) {
       // Создаем нового игрока
-      if (id !== playerId) { // Не создаем визуальный элемент для себя
-        const elem = document.createElement('div');
-        elem.className = 'other-player';
-        elem.style.position = 'absolute';
-        elem.style.borderRadius = '50%';
-        elem.style.display = 'flex';
-        elem.style.justifyContent = 'center';
-        elem.style.alignItems = 'center';
-        elem.style.backgroundColor = getRandomColor();
-        elem.style.color = 'white';
-        elem.style.fontSize = '14px';
-        elem.style.fontWeight = 'bold';
-        elem.style.zIndex = '100';
-        elem.textContent = p.name;
-        gameField.appendChild(elem);
+      if (id !== playerId) {
+        // Создаем элементы для каждой клетки
+        const elements = [];
+        if (p.cells && p.cells.length > 0) {
+          p.cells.forEach(() => {
+            const elem = document.createElement('div');
+            elem.className = 'other-player';
+            elem.style.position = 'absolute';
+            elem.style.borderRadius = '50%';
+            elem.style.display = 'flex';
+            elem.style.justifyContent = 'center';
+            elem.style.alignItems = 'center';
+            elem.style.backgroundColor = getRandomColor();
+            elem.style.color = 'white';
+            elem.style.fontSize = '14px';
+            elem.style.fontWeight = 'bold';
+            elem.style.zIndex = '100';
+            elem.textContent = p.name;
+            gameField.appendChild(elem);
+            elements.push(elem);
+          });
+        }
         
         otherPlayers[id] = {
-          element: elem,
+          elements: elements,
           name: p.name,
-          x: p.x,
-          y: p.y,
-          size: p.size,
+          cells: p.cells || [],
           score: p.score
         };
       } else {
         // Для нашего игрока запоминаем только данные
         otherPlayers[id] = {
           name: p.name,
-          x: p.x,
-          y: p.y,
-          size: p.size,
+          cells: p.cells || [],
           score: p.score
         };
         
@@ -367,23 +416,56 @@ function updateOtherPlayers(players) {
       }
     } else {
       // Обновляем данные игрока
-      otherPlayers[id].x = p.x;
-      otherPlayers[id].y = p.y;
-      otherPlayers[id].size = p.size;
-      otherPlayers[id].score = p.score;
+      const playerData = otherPlayers[id];
+      playerData.score = p.score;
       
       // Если это наш игрок, обновляем счет
       if (id === playerId) {
         document.getElementById("score").innerText = `Счёт: ${p.score}`;
+        playerData.cells = p.cells || [];
       } else {
         // Для других игроков обновляем их положение на поле
-        const elem = otherPlayers[id].element;
-        if (elem) {
-          elem.style.width = p.size + 'px';
-          elem.style.height = p.size + 'px';
-          elem.style.left = (p.x - p.size / 2) + 'px';
-          elem.style.top = (p.y - p.size / 2) + 'px';
+        const elements = playerData.elements || [];
+        const cells = p.cells || [];
+        
+        // Если количество клеток изменилось, обновляем элементы
+        while (elements.length < cells.length) {
+          const elem = document.createElement('div');
+          elem.className = 'other-player';
+          elem.style.position = 'absolute';
+          elem.style.borderRadius = '50%';
+          elem.style.display = 'flex';
+          elem.style.justifyContent = 'center';
+          elem.style.alignItems = 'center';
+          elem.style.backgroundColor = getRandomColor();
+          elem.style.color = 'white';
+          elem.style.fontSize = '14px';
+          elem.style.fontWeight = 'bold';
+          elem.style.zIndex = '100';
+          elem.textContent = p.name;
+          gameField.appendChild(elem);
+          elements.push(elem);
         }
+        
+        // Если клеток стало меньше, удаляем лишние элементы
+        while (elements.length > cells.length) {
+          const elem = elements.pop();
+          if (elem) elem.remove();
+        }
+        
+        // Обновляем позиции и размеры для всех клеток
+        cells.forEach((cell, index) => {
+          const elem = elements[index];
+          if (elem) {
+            elem.style.width = cell.size + 'px';
+            elem.style.height = cell.size + 'px';
+            elem.style.left = (cell.x - cell.size / 2) + 'px';
+            elem.style.top = (cell.y - cell.size / 2) + 'px';
+          }
+        });
+        
+        playerData.cells = cells;
+        playerData.elements = elements;
       }
     }
   }
