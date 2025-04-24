@@ -30,7 +30,7 @@ window.addEventListener("mousemove", (event) => {
   mouseY = event.clientY;
 });
 
-// Инициализация событий для меню и инструкций
+// Инициализация событий для меню и инструкци
 document.addEventListener("DOMContentLoaded", () => {
   const startForm = document.getElementById("start-form");
   const instructionsButton = document.getElementById("instructions-button");
