@@ -427,6 +427,126 @@ function checkCellMerge(player) {
   }
 }
 
+function updateCellsPhysics() {
+  Object.values(gameState.players).forEach(player => {
+    // Обновляем движение каждой клетки
+    player.cells.forEach(cell => {
+      // Если у клетки есть скорость, применяем ее
+      if (cell.vx || cell.vy) {
+        // Перемещаем клетку согласно скорости
+        cell.x += cell.vx;
+        cell.y += cell.vy;
+        
+        // Постепенно уменьшаем скорость
+        cell.vx *= 0.95;
+        cell.vy *= 0.95;
+        
+        // Если скорость стала очень маленькой, обнуляем
+        if (Math.abs(cell.vx) < 0.1) cell.vx = 0;
+        if (Math.abs(cell.vy) < 0.1) cell.vy = 0;
+      }
+      
+      // Если у клетки есть направление движения от игрока, применяем его
+      if (cell.dx || cell.dy) {
+        // Вычисляем базовую скорость в зависимости от размера
+        const speed = gameSettings.speedFactor * (50 / Math.max(10, cell.size));
+        
+        // Перемещаем клетку
+        cell.x += cell.dx * speed * 30; // 30 - примерно количество миллисекунд между кадрами
+        cell.y += cell.dy * speed * 30;
+      }
+    });
+    
+    // Проверяем необходимость слияния клеток
+    checkCellMerge(player);
+    
+    // Add this line: Check for collisions between cells of the same player
+    checkSamePlayerCollisions(player);
+  });
+}
+
+// Add this function after the checkCellMerge function (around line 428)
+// Function for checking collisions between cells of the same player
+function checkSamePlayerCollisions(player) {
+  // If the player has fewer than 2 cells, no collisions can happen
+  if (player.cells.length < 2) return;
+  
+  for (let i = 0; i < player.cells.length; i++) {
+    const cell1 = player.cells[i];
+    
+    for (let j = i + 1; j < player.cells.length; j++) {
+      const cell2 = player.cells[j];
+      
+      // Check if cells can merge (if enough time has passed)
+      const now = Date.now();
+      const canMerge = (!cell1.mergeTime || now >= cell1.mergeTime) && 
+                        (!cell2.mergeTime || now >= cell2.mergeTime);
+      
+      // Compute distance between cells
+      const dx = cell1.x - cell2.x;
+      const dy = cell1.y - cell2.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Compute the minimum distance to avoid overlap
+      const minDistance = cell1.size / 2 + cell2.size / 2;
+      
+      // If cells are overlapping and cannot merge yet, apply collision resolution
+      if (distance < minDistance && !canMerge) {
+        // Normalize the direction vector
+        const nx = dx / distance;
+        const ny = dy / distance;
+        
+        // Calculate overlap
+        const overlap = minDistance - distance;
+        
+        // Move cells apart proportionally to their sizes
+        const totalSize = cell1.size + cell2.size;
+        const ratio1 = cell2.size / totalSize;
+        const ratio2 = cell1.size / totalSize;
+        
+        // Apply position correction
+        cell1.x += nx * overlap * ratio1;
+        cell1.y += ny * overlap * ratio1;
+        cell2.x -= nx * overlap * ratio2;
+        cell2.y -= ny * overlap * ratio2;
+        
+        // Apply velocity changes for bouncing effect
+        // Calculate relative velocity
+        const vx = (cell1.vx || 0) - (cell2.vx || 0);
+        const vy = (cell1.vy || 0) - (cell2.vy || 0);
+        
+        // Calculate relative velocity in the normal direction
+        const velAlongNormal = vx * nx + vy * ny;
+        
+        // Do not resolve if velocities are separating
+        if (velAlongNormal > 0) continue;
+        
+        // Calculate restitution (bounciness)
+        const restitution = 0.3;
+        
+        // Calculate impulse scalar
+        const impulseScalar = -(1 + restitution) * velAlongNormal;
+        
+        // Apply impulse
+        const impulseX = impulseScalar * nx;
+        const impulseY = impulseScalar * ny;
+        
+        // Ensure cells have velocity properties
+        cell1.vx = cell1.vx || 0;
+        cell1.vy = cell1.vy || 0;
+        cell2.vx = cell2.vx || 0;
+        cell2.vy = cell2.vy || 0;
+        
+        // Apply impulse based on cell masses
+        cell1.vx += impulseX * ratio1;
+        cell1.vy += impulseY * ratio1;
+        cell2.vx -= impulseX * ratio2;
+        cell2.vy -= impulseY * ratio2;
+      }
+    }
+  }
+}
+
 // Функция для ограничения игроков в пределах игрового поля
 function constrainPlayers() {
   Object.values(gameState.players).forEach(player => {
