@@ -15,12 +15,14 @@ const gameSettings = {
   foodAmount: 10000,
   foodSize: { min: 5, max: 15 },
   initialPlayerSize: 48,
-  speedFactor: 0.100,
+  speedFactor: 0.05,
+  maxSpeed: 6,
+  minSpeed: 3,
   foodSpawnRate: 10,
   viewDistance: 1500, // Расстояние видимости для спавна еды
   minSplitSize: 50, // Минимальный размер для разделения
   splitCooldown: 5000, // Задержка между разделениями в мс
-  splitSpeed: 8, // Скорость отталкивания при разделении
+  splitSpeed: 1, // Скорость отталкивания при разделении
   mergeTime: 15000, // Время в мс перед повторным слиянием клеток
   minSplitScore: 200 // Минимальный счет для разделения
 };
